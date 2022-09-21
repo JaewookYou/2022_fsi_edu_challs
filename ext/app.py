@@ -1,7 +1,11 @@
+#-*-coding:utf-8-*-
 import flask
+import os, pymysql, re, hashlib, time, base64, io
 import logging, traceback
 logging.basicConfig(level=logging.INFO)
 logging.getLogger('werkzeug').setLevel(level=logging.WARNING)
+
+time.sleep(3)
 
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(16)
@@ -27,7 +31,7 @@ class mysqlapi:
 
     def duplicatedCheck(self, req):
         req = self.safeQuery(req)
-        query = f"select userid from chatdb.user where userid='{req['userid']}'"
+        query = f"select userid from fsi2022.users where userid='{req['userid']}'"
         self.cursor.execute(query)
         result = self.cursor.fetchall()
         
@@ -42,8 +46,13 @@ class mysqlapi:
         logging.info(f"[+] query(login) - {query}")
         self.cursor.execute(query)
         result = self.cursor.fetchall()
-        logging.info(f"[+] result(login) - {query}")
-        return result
+        logging.info(f"[+] result(login) - {result}")
+        if result:
+            return result[0]
+        elif result == ():
+            return "id or pw wrong!"
+        else:
+            return "error!"
 
     def doRegister(self, req):
         req = self.safeQuery(req)        
@@ -56,9 +65,77 @@ class mysqlapi:
         self.conn.commit()
         
         if self.duplicatedCheck(req):
-            return resp
+            return "[+] register success"
         else:
             return False
+
+    def getBoardList(self, req):
+        req = self.safeQuery(req)
+        query = f"select seq, subject, author from fsi2022.board where loginid='{req['userid']}' or loginid='admin'"
+        logging.info(f"[+] query(getboardlist) - {query}")
+        self.cursor.execute(query)
+        result = self.cursor.fetchall()
+        #logging.info(f"[+] result(getboardlist) - {result}")
+        if result:
+            return list(result)
+        else:
+            return "error!"
+
+    def writeBoard(self, req):
+        req = self.safeQuery(req)
+        if req['filepath'] and req['filecontent']:
+            if not self.uploadFile(req):
+                return "duplicated file or upload error"
+
+        query = f"insert into fsi2022.board (subject, content, author, loginid, filepath) values('{req['subject']}', '{req['content']}', '{req['author']}', '{req['loginid']}', '{req['filepath'] if req['filepath'] != '' else ''}')"
+
+        logging.info(f"[+] query(writeboard) - {query}")
+        self.cursor.execute(query)
+        self.conn.commit()
+        
+
+    def uploadFile(self, req):
+        req = self.safeQuery(req)
+        query = f"select count(load_file('/upload/{req['filepath']}'))"
+        self.cursor.execute(query)
+        result = self.cursor.fetchall()[0][f"count(load_file('/upload/{req['filepath']}'))"]
+        if result:
+            return "duplicated file"
+        
+        query = f"select '{req['filecontent']}' into outfile '/upload/{req['filepath']}'"
+        self.cursor.execute(query)
+        self.cursor.fetchall()
+        logging.info(f"[+] result(uploadfile) - {result}")
+
+        return True
+
+    def getBoardView(self, req):
+        req = self.safeQuery(req)
+        query = f"select subject, author, content, filepath from fsi2022.board where loginid='{req['userid']}' and seq={req['seq']}"
+        logging.info(f"[+] query(getBoardView) - {query}")
+        self.cursor.execute(query)
+        result = self.cursor.fetchall()
+        logging.info(f"[+] result(getBoardView) - {result}")
+
+        if result:
+            return result
+        else:
+            return False
+
+    def download(self, filepath):
+        query = f"select count(load_file('/upload/{filepath}')) and (select loginid from fsi2022.board where filepath='{filepath}' limit 0,1)='{flask.session['userid']}'"
+        logging.info(f"[+] query(download) - {query}")
+        self.cursor.execute(query)
+        result = list(self.cursor.fetchall()[0].values())[0]
+        
+        if result:
+            query = f"select load_file('/upload/{filepath}')"
+            self.cursor.execute(query)
+            result = base64.b64decode(list(self.cursor.fetchall()[0].values())[0])
+            return result
+        else:
+            return False
+
 
 db = mysqlapi()
 
@@ -100,13 +177,76 @@ def logout():
     flask.session.pop('isLogin', False)
     return flask.redirect(flask.url_for("login"))
 
+
 @app.route("/board", methods=["GET"])
 def board():
     if not sessionCheck(loginCheck=True):
         return flask.redirect(flask.url_for("login"))
 
-    return flask.render_template("board.html")
+    results = db.getBoardList({'userid':flask.session["userid"]})
 
+    return flask.render_template("board.html", results=results)
+
+
+@app.route("/board/<seq>")
+def viewboard(seq):
+    if not sessionCheck(loginCheck=True):
+        return flask.redirect(flask.url_for("login"))
+
+    results = db.getBoardView({'userid':flask.session["userid"], 'seq':seq})
+    if not results:
+        return "<script>alert('?');location.replace('/');</script>"
+    return flask.render_template("view.html", results=results[0])
+
+
+@app.route("/write", methods=["GET", "POST"])
+def write():
+    if not sessionCheck(loginCheck=True):
+        return flask.redirect(flask.url_for("login"))
+
+    if flask.request.method == "GET":
+        return flask.render_template("write.html")
+
+    elif flask.request.method == "POST":
+        subject = flask.request.form["subject"]
+        content = flask.request.form["content"]
+        file = flask.request.files["file"]
+        filename = file.filename
+        filecontent = base64.b64encode(file.read()).decode()
+        
+        req = {
+            'subject':subject,
+            'content':content,
+            'author':flask.session['userid'],
+            'loginid':flask.session['userid'],
+            'filepath':filename,
+            'filecontent':filecontent
+        }
+
+        result = db.writeBoard(req)
+
+        if result:
+            return '<script>alert("file upload error..");location.replace("/board");</script>'
+
+
+        return flask.redirect(flask.url_for("board"))
+
+@app.route("/download", methods=["GET"])
+def download():
+    if not sessionCheck(loginCheck=True):
+        return flask.redirect(flask.url_for("login"))
+
+    filepath = flask.request.args["filepath"]
+    
+    result = db.download(filepath)
+    if result:
+        return flask.send_file(
+                    io.BytesIO(result),
+                    as_attachment=True,
+                    attachment_filename=filepath
+                )
+    else:
+        return f"<script>alert('you cannot download {filepath}');location.replace('/board');</script>"
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -128,7 +268,7 @@ def login():
             return flask.render_template("login.html", msg="invalid userid or userpw")
         
 
-        queryResult = db.doLoginQuery({
+        queryResult = db.doLogin({
             'userid':flask.request.form["userid"], 
             'userpw':hashlib.sha256(flask.request.form["userpw"].encode()).hexdigest()
         })
@@ -138,7 +278,7 @@ def login():
             flask.session["isLogin"] = True
             
             resp = flask.make_response(flask.redirect(flask.url_for("board")))
-            resp.set_cookie('userid', userid)
+            resp.set_cookie('userid', flask.session["userid"])
             return resp
         else:
             return flask.render_template("login.html", msg=queryResult)
@@ -163,9 +303,17 @@ def register():
         if not checkUserIDPW(flask.request.form["userid"], flask.request.form["userpw"]):
             return flask.render_template("register.html", msg="invalid userid or userpw")
 
-        resp = doRegisterQuery({
+        resp = db.doRegister({
             'userid': flask.request.form["userid"], 
             'userpw': hashlib.sha256(flask.request.form["userpw"].encode()).hexdigest()
         })
 
         return flask.render_template("login.html", msg=resp)
+
+
+if __name__ == "__main__":
+    try:
+        app.run(host="0.0.0.0", port=9090, debug=True)
+    except Exception as ex:
+        logging.info(str(ex))
+        pass

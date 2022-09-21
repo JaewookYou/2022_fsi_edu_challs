@@ -4,8 +4,10 @@ services:
     build: ./docker/ext
     container_name: external-server
     volumes:
-      - ./data/ext:/app
+      - ./ext:/app
     stdin_open: true
+    environment:
+      LC_ALL: C.UTF-8
     tty: true
     depends_on:
       - internal_server
@@ -21,6 +23,8 @@ services:
     volumes:
       - ./data/int:/app
     stdin_open: true
+    environment:
+      LC_ALL: C.UTF-8
     tty: true
     depends_on:
       - db
@@ -33,10 +37,9 @@ services:
     container_name: mysql-db
     environment:
       MYSQL_ROOT_PASSWORD: "mysq1_r00t_p4ssw0rd_d0_n0t_cr4ck_th1s"
-      secure-file-priv: "/upload/"
     volumes:
-      - "./data/db/:/docker-entrypoint-initdb.d/"
-    command: mysqld --innodb-buffer-pool-size=16M
+      - "./mysql/:/docker-entrypoint-initdb.d/"
+    command: mysqld --innodb-buffer-pool-size=16M --secure-file-priv="/upload/" --character-set-server=utf8 --collation-server=utf8_general_ci
     networks:
       backend:
         ipv4_address: 172.22.0.5

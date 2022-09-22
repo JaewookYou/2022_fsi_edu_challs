@@ -15,7 +15,7 @@ services:
       - "9090:9090"
     networks:
       backend:
-        ipv4_address: 172.22.0.3
+        ipv4_address: 172.22.0.3 
 
   internal_server:
     build: ./docker/int

@@ -11,10 +11,6 @@
 	
 	<link rel="stylesheet" href="/static/css/style.css">
 	<script>
-		function fn_addtoBoard(){
-			
-		}
-
 		function fn_cancel(){
 			location.replace(`/board`);
 		}
@@ -44,11 +40,11 @@
 				                </div>
 				                <div class="mb-3">
 												  <label class="form-label">파일 첨부</label>
-												  <input class="form-control" type="file" id="formFile" name="file" onClick='fn_addtoBoard()'>
+												  <input class="form-control" type="file" id="formFile" name="file">
 												</div>
 				                <div>
 				                	<center>
-				                    <input class="btn btn-success btn-lg" type="submit" onClick='fn_addtoBoard()' value="글쓰기">
+				                    <input class="btn btn-success btn-lg" type="submit" value="글쓰기">
 				              			<input class="btn btn-info btn-lg" onClick='fn_cancel()' value="목록">
 				              		</center>
 				                </div>

@@ -19,7 +19,7 @@ class mysqlapi:
             host = '172.22.0.5',
             db = 'fsi2022',
             charset = 'utf8'
-        )
+        ) 
         self.conn.autocommit(True)
         self.cursor = self.conn.cursor(pymysql.cursors.DictCursor)
 
@@ -32,8 +32,9 @@ class mysqlapi:
     def duplicatedCheck(self, req):
         req = self.safeQuery(req)
         query = f"select userid from fsi2022.users where userid='{req['userid']}'"
-        self.cursor.execute(query)
-        result = self.cursor.fetchall()
+        # self.cursor.execute(query)
+        # result = self.cursor.fetchall()
+        result = self.doSelectQuery(query)
         
         if result != ():
             return True
@@ -44,8 +45,9 @@ class mysqlapi:
         req = self.safeQuery(req)
         query = f"select userid from fsi2022.users where userid='{req['userid']}' and userpw='{req['userpw']}'"
         logging.info(f"[+] query(login) - {query}")
-        self.cursor.execute(query)
-        result = self.cursor.fetchall()
+        # self.cursor.execute(query)
+        # result = self.cursor.fetchall()
+        result = self.doSelectQuery(query)
         logging.info(f"[+] result(login) - {result}")
         if result:
             return result[0]
@@ -73,8 +75,9 @@ class mysqlapi:
         req = self.safeQuery(req)
         query = f"select seq, subject, author from fsi2022.board where loginid='{req['userid']}' or loginid='admin'"
         logging.info(f"[+] query(getboardlist) - {query}")
-        self.cursor.execute(query)
-        result = self.cursor.fetchall()
+        # self.cursor.execute(query)
+        # result = self.cursor.fetchall()
+        result = self.doSelectQuery(query)
         #logging.info(f"[+] result(getboardlist) - {result}")
         if result:
             return list(result)
@@ -96,16 +99,15 @@ class mysqlapi:
 
     def uploadFile(self, req):
         req = self.safeQuery(req)
-        query = f"select count(load_file('/upload/{req['filepath']}'))"
-        self.cursor.execute(query)
-        result = self.cursor.fetchall()[0][f"count(load_file('/upload/{req['filepath']}'))"]
-        if result:
+        isexist = self.checkExistFile(req['filepath'])
+        if isexist:
             return "duplicated file"
         
         query = f"select '{req['filecontent']}' into outfile '/upload/{req['filepath']}'"
-        self.cursor.execute(query)
-        self.cursor.fetchall()
-        logging.info(f"[+] result(uploadfile) - {result}")
+        result = self.doSelectQuery(query)
+        # self.cursor.execute(query)
+        # self.cursor.fetchall()
+        #logging.info(f"[+] result(uploadfile) - {result}")
 
         return True
 
@@ -113,28 +115,63 @@ class mysqlapi:
         req = self.safeQuery(req)
         query = f"select subject, author, content, filepath from fsi2022.board where loginid='{req['userid']}' and seq={req['seq']}"
         logging.info(f"[+] query(getBoardView) - {query}")
-        self.cursor.execute(query)
-        result = self.cursor.fetchall()
+        result = self.doSelectQuery(query)
+        # result = self.cursor.fetchall()
         logging.info(f"[+] result(getBoardView) - {result}")
 
         if result:
             return result
         else:
             return False
+    
+    def checkExistFile(self, filepath):
+        req = self.safeQuery({'filepath':filepath})
+        query = f"select count(load_file('/upload/{req['filepath']}'))"
+        logging.info(f"[+] query(checkExistFile) - {query}")
+        result = self.doSelectQuery(query)
+        isExist = list(result[0].values())[0]
+        # result = list(self.cursor.fetchall()[0].values())[0]
+        logging.info(f"[+] result(checkExistFile) - {isExist}")
+        if isExist:
+            return True
+        else:
+            return False
 
     def download(self, filepath):
-        query = f"select count(load_file('/upload/{filepath}')) and (select loginid from fsi2022.board where filepath='{filepath}' limit 0,1)='{flask.session['userid']}'"
+        # isexist = self.checkExistFile(filepath)
+        # if not isexist:
+        #     logging.info(f"[x] not exist file {filepath}")
+        #     return False
+        # ' or (select load_file)
+        query = f"select loginid from fsi2022.board where filepath='{filepath}' limit 0,1"
         logging.info(f"[+] query(download) - {query}")
-        self.cursor.execute(query)
-        result = list(self.cursor.fetchall()[0].values())[0]
-        
-        if result:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        result = self.doSelectQuery(query)
+        print(result)
+        if type(result)==str:
+            print("????")
+            return f"download error.. {result}"
+
+        if len(result)>0:
+            fileOwner = list(result[0].values())[0]
+            logging.info(f"[+] result(download) - {fileOwner}")
+        else:
+            return f"select result has no data"
+
+        if fileOwner == flask.session['userid']:
             query = f"select load_file('/upload/{filepath}')"
             self.cursor.execute(query)
             result = base64.b64decode(list(self.cursor.fetchall()[0].values())[0])
-            return result
+            return {'result': result}
         else:
-            return False
+            return f"file owner({fileOwner})!=loginid({flask.session['userid']})"
+    
+    def doSelectQuery(self, query):
+        try:
+            self.cursor.execute(query)
+            return self.cursor.fetchall()
+        except Exception as e:
+            return str(e)
 
 
 db = mysqlapi()
@@ -239,14 +276,14 @@ def download():
     filepath = flask.request.args["filepath"]
     
     result = db.download(filepath)
-    if result:
+    if type(result) == dict:
         return flask.send_file(
-                    io.BytesIO(result),
+                    io.BytesIO(result['result']),
                     as_attachment=True,
                     attachment_filename=filepath
                 )
     else:
-        return f"<script>alert('you cannot download {filepath}');location.replace('/board');</script>"
+        return f'<script>alert(`download err: {result}`);location.replace("/board");</script>'
 
 @app.route("/login", methods=["GET","POST"])
 def login():

@@ -43,7 +43,7 @@
                 {% for i in results %}
                     <tr>
                         <td>{{i['seq']}}</td>
-                        <td><a href='#' onClick='fn_view({{i["seq"]}})'>{{i['subject']}}</a></td>
+                        <td><a href='#' onClick='fn_view({{i["seq"]}})' id="article-{{i['seq']}}">{{i['subject']}}</a></td>
                         <td>{{i['author']}}</td>
                     </tr>
                 {% endfor %}

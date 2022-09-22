@@ -29,7 +29,7 @@ create table board(
 ALTER TABLE users CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;
 ALTER TABLE board CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;
 
-insert into users (userid, userpw) values ("admin", "th1s_1s_adm111n_p4ssw0rd"); # admin password 가리기
+insert into users (userid, userpw) values ("admin", sha2("th1s_1s_adm111n_p4ssw0rd",256)); # admin password 가리기
 insert into board (subject, content, author, loginid, filepath) values ("flag is here!", "fsi2022{n0w_you_4re_g00d_at_xss_m4ybe?}", "admin", "admin", null);
 
 grant select, insert on users to 'user'@'%';

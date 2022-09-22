@@ -32,8 +32,6 @@ class mysqlapi:
     def duplicatedCheck(self, req):
         req = self.safeQuery(req)
         query = f"select userid from fsi2022.users where userid='{req['userid']}'"
-        # self.cursor.execute(query)
-        # result = self.cursor.fetchall()
         result = self.doSelectQuery(query)
         
         if result != ():
@@ -45,8 +43,6 @@ class mysqlapi:
         req = self.safeQuery(req)
         query = f"select userid from fsi2022.users where userid='{req['userid']}' and userpw='{req['userpw']}'"
         logging.info(f"[+] query(login) - {query}")
-        # self.cursor.execute(query)
-        # result = self.cursor.fetchall()
         result = self.doSelectQuery(query)
         logging.info(f"[+] result(login) - {result}")
         if result:
@@ -73,12 +69,9 @@ class mysqlapi:
 
     def getBoardList(self, req):
         req = self.safeQuery(req)
-        query = f"select seq, subject, author from fsi2022.board where loginid='{req['userid']}' or loginid='admin'"
+        query = f"select seq, subject, author from fsi2022.board where loginid='{req['userid']}'"
         logging.info(f"[+] query(getboardlist) - {query}")
-        # self.cursor.execute(query)
-        # result = self.cursor.fetchall()
         result = self.doSelectQuery(query)
-        #logging.info(f"[+] result(getboardlist) - {result}")
         if result:
             return list(result)
         else:
@@ -105,18 +98,14 @@ class mysqlapi:
         
         query = f"select '{req['filecontent']}' into outfile '/upload/{req['filepath']}'"
         result = self.doSelectQuery(query)
-        # self.cursor.execute(query)
-        # self.cursor.fetchall()
-        #logging.info(f"[+] result(uploadfile) - {result}")
 
         return True
 
     def getBoardView(self, req):
         req = self.safeQuery(req)
-        query = f"select subject, author, content, filepath from fsi2022.board where loginid='{req['userid']}' and seq={req['seq']}"
+        query = f"select subject, author, content, filepath from fsi2022.board where (loginid='{req['userid']}' or loginid='admin') and seq={req['seq']}"
         logging.info(f"[+] query(getBoardView) - {query}")
         result = self.doSelectQuery(query)
-        # result = self.cursor.fetchall()
         logging.info(f"[+] result(getBoardView) - {result}")
 
         if result:
@@ -130,7 +119,6 @@ class mysqlapi:
         logging.info(f"[+] query(checkExistFile) - {query}")
         result = self.doSelectQuery(query)
         isExist = list(result[0].values())[0]
-        # result = list(self.cursor.fetchall()[0].values())[0]
         logging.info(f"[+] result(checkExistFile) - {isExist}")
         if isExist:
             return True
@@ -138,11 +126,6 @@ class mysqlapi:
             return False
 
     def download(self, filepath):
-        # isexist = self.checkExistFile(filepath)
-        # if not isexist:
-        #     logging.info(f"[x] not exist file {filepath}")
-        #     return False
-        # ' or (select load_file)
         query = f"select loginid from fsi2022.board where filepath='{filepath}' limit 0,1"
         logging.info(f"[+] query(download) - {query}")
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")

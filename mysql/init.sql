@@ -20,17 +20,17 @@ create table users(
 create table board(
 	seq int not null primary key auto_increment,
 	subject varchar(255) not null,
-	content varchar(255) not null,
+	content text(65535) not null,
 	author varchar(255) not null,
-	loginid varchar(255),
-	filepath varchar(255)
+	loginid varchar(50),
+	filepath text(65535)
 );
 
 ALTER TABLE users CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;
 ALTER TABLE board CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;
 
 insert into users (userid, userpw) values ("admin", sha2("th1s_1s_adm111n_p4ssw0rd",256)); # admin password 가리기
-insert into board (subject, content, author, loginid, filepath) values ("flag is here!", "fsi2022{n0w_you_4re_g00d_at_xss_m4ybe?}", "admin", "admin", null);
+insert into board (subject, content, author, loginid, filepath) values ("flag is here!", "fsi2022{n0w_you_4re_g00d_at_xss_m4ybe?}", "admin", "admin", "flag.txt");
 
 grant select, insert on users to 'user'@'%';
 grant select, insert on board to 'user'@'%';

@@ -14,10 +14,6 @@
 		function fn_view(seq){
 			location.replace(`/board/${seq}`);
 		}
-
-		function fn_write(){
-			location.replace('/write');
-		} 
 	</script>
 	</head>
 	<body>
@@ -51,7 +47,8 @@
         </table>
         <center>
         <div>            
-            <a href='#' onClick='fn_write()' class="btn btn-success">글쓰기</a>            
+            <a href='#' onClick='location.replace("/write");' class="btn btn-success">글쓰기</a>            
+            <a href='#' onClick='location.replace("/report")' class="btn btn-warning">관리자에게 글 읽기 요청</a>    
             <a href='#' onClick='location.replace("/logout")' class="btn btn-info">로그아웃</a>            
         </div>
     	</center>

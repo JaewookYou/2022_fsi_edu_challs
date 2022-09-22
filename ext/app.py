@@ -1,6 +1,6 @@
 #-*-coding:utf-8-*-
 import flask
-import os, pymysql, re, hashlib, time, base64, io
+import os, pymysql, re, hashlib, time, base64, io, requests
 import logging, traceback
 logging.basicConfig(level=logging.INFO)
 logging.getLogger('werkzeug').setLevel(level=logging.WARNING)
@@ -25,13 +25,13 @@ class mysqlapi:
 
     def safeQuery(self, req):
         for key in req.keys():
-            req[key] = re.sub(r"[\'\"\\\(\)\|\&\[\]\!\@\#\$\%]",r'\\\g<0>', req[key])
+            req[key] = re.sub(r"[\"\\\|\&\[\]\!\@\#\$\%]",r'\\\g<0>', req[key])
 
         return req
 
     def duplicatedCheck(self, req):
         req = self.safeQuery(req)
-        query = f"select userid from fsi2022.users where userid='{req['userid']}'"
+        query = f'select userid from fsi2022.users where userid="{req["userid"]}"'
         result = self.doSelectQuery(query)
         
         if result != ():
@@ -41,7 +41,7 @@ class mysqlapi:
 
     def doLogin(self, req):
         req = self.safeQuery(req)
-        query = f"select userid from fsi2022.users where userid='{req['userid']}' and userpw='{req['userpw']}'"
+        query = f'select userid from fsi2022.users where userid="{req["userid"]}" and userpw="{req["userpw"]}"'
         logging.info(f"[+] query(login) - {query}")
         result = self.doSelectQuery(query)
         logging.info(f"[+] result(login) - {result}")
@@ -57,7 +57,7 @@ class mysqlapi:
         if self.duplicatedCheck(req):
             return "[x] duplicated id"
 
-        query = f"insert into fsi2022.users (userid, userpw) values('{req['userid']}', '{req['userpw']}')"
+        query = f'insert into fsi2022.users (userid, userpw) values("{req["userid"]}", "{req["userpw"]}")'
         logging.info(f"[+] query(register) - {query}")
         self.cursor.execute(query)
         self.conn.commit()
@@ -69,7 +69,7 @@ class mysqlapi:
 
     def getBoardList(self, req):
         req = self.safeQuery(req)
-        query = f"select seq, subject, author from fsi2022.board where loginid='{req['userid']}'"
+        query = f'select seq, subject, author from fsi2022.board where author="{req["author"]}" or author="admin"'
         logging.info(f"[+] query(getboardlist) - {query}")
         result = self.doSelectQuery(query)
         if result:
@@ -83,7 +83,7 @@ class mysqlapi:
             if not self.uploadFile(req):
                 return "duplicated file or upload error"
 
-        query = f"insert into fsi2022.board (subject, content, author, loginid, filepath) values('{req['subject']}', '{req['content']}', '{req['author']}', '{req['loginid']}', '{req['filepath'] if req['filepath'] != '' else ''}')"
+        query = f'insert into fsi2022.board (subject, content, author, loginid, filepath) values("{req["subject"]}", "{req["content"]}", "{req["author"]}", "{req["loginid"]}", "{req["filepath"] if req["filepath"] != "" else ""}")'
 
         logging.info(f"[+] query(writeboard) - {query}")
         self.cursor.execute(query)
@@ -93,17 +93,18 @@ class mysqlapi:
     def uploadFile(self, req):
         req = self.safeQuery(req)
         isexist = self.checkExistFile(req['filepath'])
+
         if isexist:
-            return "duplicated file"
-        
-        query = f"select '{req['filecontent']}' into outfile '/upload/{req['filepath']}'"
+            return False
+        logging.info(f"[+] do upload! {req['filepath']}")
+        query = f'select "{req["filecontent"]}" into outfile "/upload/{req["filepath"]}"'
         result = self.doSelectQuery(query)
 
         return True
 
     def getBoardView(self, req):
         req = self.safeQuery(req)
-        query = f"select subject, author, content, filepath from fsi2022.board where (loginid='{req['userid']}' or loginid='admin') and seq={req['seq']}"
+        query = f'select subject, author, content, filepath from fsi2022.board where author="{req["author"]}" and seq="{req["seq"]}"'
         logging.info(f"[+] query(getBoardView) - {query}")
         result = self.doSelectQuery(query)
         logging.info(f"[+] result(getBoardView) - {result}")
@@ -115,7 +116,7 @@ class mysqlapi:
     
     def checkExistFile(self, filepath):
         req = self.safeQuery({'filepath':filepath})
-        query = f"select count(load_file('/upload/{req['filepath']}'))"
+        query = f'select count(load_file("/upload/{req["filepath"]}"))'
         logging.info(f"[+] query(checkExistFile) - {query}")
         result = self.doSelectQuery(query)
         isExist = list(result[0].values())[0]
@@ -126,13 +127,11 @@ class mysqlapi:
             return False
 
     def download(self, filepath):
-        query = f"select loginid from fsi2022.board where filepath='{filepath}' limit 0,1"
+        query = f'select loginid from fsi2022.board where filepath="{filepath}" limit 0,1'
         logging.info(f"[+] query(download) - {query}")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         result = self.doSelectQuery(query)
         print(result)
         if type(result)==str:
-            print("????")
             return f"download error.. {result}"
 
         if len(result)>0:
@@ -142,7 +141,7 @@ class mysqlapi:
             return f"select result has no data"
 
         if fileOwner == flask.session['userid']:
-            query = f"select load_file('/upload/{filepath}')"
+            query = f'select load_file("/upload/{filepath}")'
             self.cursor.execute(query)
             result = base64.b64decode(list(self.cursor.fetchall()[0].values())[0])
             return {'result': result}
@@ -160,19 +159,11 @@ class mysqlapi:
 db = mysqlapi()
 
 
-
 def checkUserIDPW(userid, userpw):
     if re.search(r"[^\w]",userid) or len(userid) == 0 or len(userid) > 50 or len(userpw) == 0 or len(userpw) > 50:
         return False
     else:
         return True
-        
-def secureFileName(filename):
-    # replace all regex 바꾸기
-    filteringList = ["..","\\","\x00","'",'"']
-    for filterChar in filteringList:
-        filename = filename.replace(filterChar, "")
-    return filename
 
 def sessionCheck(loginCheck=False):   
     if loginCheck:
@@ -197,13 +188,26 @@ def logout():
     flask.session.pop('isLogin', False)
     return flask.redirect(flask.url_for("login"))
 
+@app.route("/report", methods=["GET", "POST"])
+def report():
+    if flask.request.method == "GET":
+        return '''
+        <form method="POST" action="/report">
+            <input type="text" name="url" placeholder="input url..." style="width:25%; height: 7%;">
+            <input type="submit" value="submit">
+        </form>
+        '''
+    elif flask.request.method == "POST":
+        url = flask.request.form['url']
+        requests.get(f"http://172.22.0.4:9000/run?url={url}")
+        return "<script>history.go(-1);</script>"
 
 @app.route("/board", methods=["GET"])
 def board():
     if not sessionCheck(loginCheck=True):
         return flask.redirect(flask.url_for("login"))
 
-    results = db.getBoardList({'userid':flask.session["userid"]})
+    results = db.getBoardList({'author':flask.session["userid"]})
 
     return flask.render_template("board.html", results=results)
 
@@ -213,7 +217,7 @@ def viewboard(seq):
     if not sessionCheck(loginCheck=True):
         return flask.redirect(flask.url_for("login"))
 
-    results = db.getBoardView({'userid':flask.session["userid"], 'seq':seq})
+    results = db.getBoardView({'author':flask.session["userid"], 'seq':seq})
     if not results:
         return "<script>alert('?');location.replace('/');</script>"
     return flask.render_template("view.html", results=results[0])
@@ -225,19 +229,24 @@ def write():
         return flask.redirect(flask.url_for("login"))
 
     if flask.request.method == "GET":
-        return flask.render_template("write.html")
+        return flask.render_template("write.html", loginid=flask.session["userid"])
 
     elif flask.request.method == "POST":
         subject = flask.request.form["subject"]
+        author = flask.request.form["author"]
         content = flask.request.form["content"]
-        file = flask.request.files["file"]
-        filename = file.filename
-        filecontent = base64.b64encode(file.read()).decode()
+        if "file" in flask.request.files:
+            file = flask.request.files["file"]
+            filename = file.filename
+            filecontent = base64.b64encode(file.read()).decode()
+        else:
+            filename = ""
+            filecontent = ""
         
         req = {
             'subject':subject,
+            'author':author,
             'content':content,
-            'author':flask.session['userid'],
             'loginid':flask.session['userid'],
             'filepath':filename,
             'filecontent':filecontent
@@ -246,7 +255,7 @@ def write():
         result = db.writeBoard(req)
 
         if result:
-            return '<script>alert("file upload error..");location.replace("/board");</script>'
+            return f'<script>alert("{result}");location.replace("/board");</script>'
 
 
         return flask.redirect(flask.url_for("board"))

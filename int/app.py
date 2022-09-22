@@ -154,20 +154,11 @@ class mysqlapi:
 
 db = mysqlapi()
 
-
-
 def checkUserIDPW(userid, userpw):
     if re.search(r"[^\w]",userid) or len(userid) == 0 or len(userid) > 50 or len(userpw) == 0 or len(userpw) > 50:
         return False
     else:
         return True
-        
-def secureFileName(filename):
-    # replace all regex 바꾸기
-    filteringList = ["..","\\","\x00","'",'"']
-    for filterChar in filteringList:
-        filename = filename.replace(filterChar, "")
-    return filename
 
 def sessionCheck(loginCheck=False):   
     if loginCheck:

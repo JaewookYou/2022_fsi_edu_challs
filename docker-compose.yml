@@ -21,13 +21,16 @@ services:
     build: ./docker/int
     container_name: internal-server
     volumes:
-      - ./data/int:/app
+      - ./int:/app
     stdin_open: true
     environment:
       LC_ALL: C.UTF-8
     tty: true
     depends_on:
       - db
+    cap_add:
+      - NET_ADMIN 
+      - NET_RAW
     networks:
       backend:
         ipv4_address: 172.22.0.4
